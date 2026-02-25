@@ -1,0 +1,72 @@
+# LICENSE HEADER MANAGED BY add-license-header
+#
+# Copyright 2018 Kornia Team
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+from typing import Dict
+
+import pytest
+import torch
+
+import kornia
+import kornia.geometry.epipolar as epi
+
+from testing.base import BaseTester
+
+
+class TestTriangulation(BaseTester):
+    def test_smoke(self, device, dtype):
+        P1 = torch.rand(1, 3, 4, device=device, dtype=dtype)
+        P2 = torch.rand(1, 3, 4, device=device, dtype=dtype)
+        points1 = torch.rand(1, 1, 2, device=device, dtype=dtype)
+        points2 = torch.rand(1, 1, 2, device=device, dtype=dtype)
+        points3d = epi.triangulate_points(P1, P2, points1, points2)
+        assert points3d.shape == (1, 1, 3)
+
+    @pytest.mark.parametrize("batch_size, num_points", [(1, 3), (2, 4), (3, 5)])
+    def test_shape(self, batch_size, num_points, device, dtype):
+        B, N = batch_size, num_points
+        P1 = torch.rand(B, 3, 4, device=device, dtype=dtype)
+        P2 = torch.rand(1, 3, 4, device=device, dtype=dtype)
+        points1 = torch.rand(1, N, 2, device=device, dtype=dtype)
+        points2 = torch.rand(B, N, 2, device=device, dtype=dtype)
+        points3d = epi.triangulate_points(P1, P2, points1, points2)
+        assert points3d.shape == (B, N, 3)
+
+    @pytest.mark.xfail()
+    def test_two_view(self, device, dtype):
+        num_views: int = 2
+        num_points: int = 10
+        scene: Dict[str, torch.Tensor] = epi.generate_scene(num_views, num_points)
+
+        P1 = scene["P"][0:1]
+        P2 = scene["P"][1:2]
+        x1 = scene["points2d"][0:1]
+        x2 = scene["points2d"][1:2]
+
+        X = epi.triangulate_points(P1, P2, x1, x2)
+        x_reprojected = kornia.geometry.transform_points(scene["P"], X.expand(num_views, -1, -1))
+
+        self.assert_close(scene["points3d"], X, rtol=1e-4, atol=1e-4)
+        self.assert_close(scene["points2d"], x_reprojected, rtol=1e-4, atol=1e-4)
+
+    def test_gradcheck(self, device):
+        points1 = torch.rand(1, 8, 2, device=device, dtype=torch.float64, requires_grad=True)
+        points2 = torch.rand(1, 8, 2, device=device, dtype=torch.float64)
+        P1 = kornia.core.ops.eye_like(3, points1)
+        P1 = torch.nn.functional.pad(P1, [0, 1])
+        P2 = kornia.core.ops.eye_like(3, points2)
+        P2 = torch.nn.functional.pad(P2, [0, 1])
+        assert self.gradcheck(epi.triangulate_points, (P1, P2, points1, points2), raise_exception=True, fast_mode=True)

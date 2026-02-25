@@ -1,0 +1,338 @@
+# LICENSE HEADER MANAGED BY add-license-header
+#
+# Copyright 2018 Kornia Team
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+import builtins
+import importlib.util
+import inspect
+import os
+import sys
+from datetime import UTC, datetime
+
+# Monkey-patch for PyTorch compatibility with sphinx_autodoc_typehints
+# Newer versions of PyTorch removed torch.jit.annotations.compiler_flag
+import torch.jit.annotations
+
+if not hasattr(torch.jit.annotations, "compiler_flag"):
+    torch.jit.annotations.compiler_flag = None
+
+# To add an evnironment variable
+builtins.__sphinx_build__ = True
+
+# --- Patch sphinx_autodoc_defaultargs to not crash on torchscript/pybind11 callables ---
+# --- Patch sphinx_autodoc_defaultargs to not crash on torchscript/pybind11 callables ---
+try:
+    import sphinx_autodoc_defaultargs
+
+    _orig_process_docstring = sphinx_autodoc_defaultargs.process_docstring
+
+    def _safe_process_docstring(app, what, name, obj, options, lines):
+        try:
+            return _orig_process_docstring(app, what, name, obj, options, lines)
+        except ValueError as e:
+            msg = str(e).lower()
+            if "no signature found for builtin" in msg or "pybind11" in msg:
+                return  # leave docstring unchanged
+            raise
+
+    sphinx_autodoc_defaultargs.process_docstring = _safe_process_docstring
+
+except (ModuleNotFoundError, ImportError):
+    # Optional dependency not installed in some environments.
+    sphinx_autodoc_defaultargs = None
+
+except AttributeError:
+    # Extension API changed; don't patch.
+    sphinx_autodoc_defaultargs = None
+
+
+# readthedocs generated the whole documentation in an isolated environment
+# by cloning the git repo. Thus, any on-the-fly operation will not effect
+# on the resulting documentation. We therefore need to import and run the
+# corresponding code here.
+spec = importlib.util.spec_from_file_location("generate_examples", "../generate_examples.py")
+generate_examples = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(generate_examples)
+
+# Pre-generate the example images
+generate_examples.main()
+
+# If extensions (or modules to document with autodoc) are in another directory,
+# add these directories to sys.path here. If the directory is relative to the
+# documentation root, use os.path.abspath to make it absolute, like shown here.
+#
+current_path = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
+sys.path.append(current_path)
+
+# -- General configuration ------------------------------------------------
+
+# If your documentation needs a minimal Sphinx version, state it here.
+#
+# needs_sphinx = '1.0'
+
+# Add any Sphinx extension module names here, as strings. They can be
+# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
+# ones.
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.doctest",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.napoleon",
+    "sphinx_autodoc_typehints",
+    "sphinx_autodoc_defaultargs",
+    "sphinx_copybutton",
+    "sphinx.ext.linkcode",
+    "sphinx.ext.githubpages",
+    "sphinxcontrib.bibtex",
+    "sphinxcontrib.gtagjs",
+    "sphinxcontrib.youtube",
+    "sphinx_design",
+    "notfound.extension",
+]
+
+# substitutes the default values
+docstring_default_arg_substitution = "Default: "
+autodoc_preserve_defaults = True
+
+bibtex_bibfiles = ["references.bib"]
+napoleon_use_ivar = True
+
+# Add any paths that contain templates here, relative to this directory.
+templates_path = ["_templates"]
+
+# The suffix(es) of source filenames.
+# You can specify multiple suffix as a list of string:
+#
+# source_suffix = ['.rst', '.md']
+source_suffix = [".rst", ".ipynb"]
+
+# The master toctree document.
+master_doc = "index"
+
+# General information about the project.
+project = "Kornia"
+author = f"{project} developers"
+copyright = f"{datetime.now(tz=UTC).year}, {author}"
+
+# The version info for the project you're documenting, acts as replacement for
+# |version| and |release|, also used in various other places throughout the
+# built documents.
+
+# version = 'master (' + kornia.__version__ + ' )'
+version = ""
+
+if "READTHEDOCS" not in os.environ:
+    # if developing locally, use kornia.__version__ as version
+    from kornia import __version__
+
+    version = __version__
+
+# release = 'master'
+release = version
+
+# The language for content autogenerated by Sphinx. Refer to documentation
+# for a list of supported languages.
+#
+# This is also used if you do content translation via gettext catalogs.
+# Usually you set "language" from the command line for these cases.
+language = "en"
+
+# List of patterns, relative to source directory, that match files and
+# directories to ignore when looking for source files.
+# This patterns also effect to html_static_path and html_extra_path
+exclude_patterns = ["_build", ".ipynb_checkpoints"]
+
+# The name of the Pygments (syntax highlighting) style to use.
+pygments_style = "friendly"
+pygments_dark_style = "monokai"
+
+html_theme = "furo"
+
+# Theme options are theme-specific and customize the look and feel of a theme
+# further.  For a list of options available for each theme, see the
+# documentation.
+#
+# TODO(jian): make to work with https://docs.kornia.org
+html_baseurl = "https://kornia.readthedocs.io"
+
+# Changing sidebar title to Kornia
+html_title = "Kornia"
+
+html_theme_options = {
+    # 'analytics_id': 'G-RKS4WFXVHJ', # Unsupported by furo theme
+    "light_logo": "img/kornia_logo_only_light.svg",
+    "dark_logo": "img/kornia_logo_only_dark.svg",
+    "sidebar_hide_name": True,
+    "navigation_with_keys": True,
+    "light_css_variables": {
+        "color-sidebar-background": "#3980F5",
+        "color-sidebar-background-border": "#3980F5",
+        "color-sidebar-caption-text": "white",
+        "color-sidebar-link-text--top-level": "white",
+        "color-sidebar-link-text": "white",
+        "sidebar-caption-font-size": "normal",
+        "color-sidebar-item-background--hover": " #5dade2",
+    },
+    "dark_css_variables": {
+        "color-sidebar-background": "#1a1c1e",
+        "color-sidebar-background-border": "#1a1c1e",
+        "color-sidebar-caption-text": "white",
+        "color-sidebar-link-text--top-level": "white",
+    },
+    # "announcement": """
+    #     <a style=\"text-decoration: none; color: white;\"
+    #        href=\"https://github.com/kornia/kornia\">
+    #        <img src=\"https://github.com/kornia/data/raw/main/GitHub-Mark-Light-32px.png\" width=20 height=20/>
+    #        Star Kornia on GitHub
+    #     </a>
+    # """,
+}
+
+# html_logo = '_static/img/kornia_logo.svg'
+# html_logo = '_static/img/kornia_logo_only.png'
+html_favicon = "_static/img/kornia_logo_favicon.png"
+
+# Config the `sphinxcontrib.gtagjs` extension
+# NOTE: if this didn't work, we can remove the extension itself
+gtagjs_ids = [
+    "G-YSCFZB2WDV",  # Shouldn't be necessary if the readthedocs autoinjection work
+]
+
+# Add any paths that contain custom static files (such as style sheets) here,
+# relative to this directory. They are copied after the builtin static files,
+# so a file named "default.css" will overwrite the builtin "default.css".
+html_static_path = ["_static"]
+html_extra_path = []
+
+# Output file base name for HTML help builder.
+htmlhelp_basename = "Kornia"
+html_css_files = ["css/main.css"]
+html_js_files = [
+    "js/custom.js",
+    ("https://gradio.s3-us-west-2.amazonaws.com/4.38.1/gradio.js", {"defer": "defer", "type": "module"}),
+    "https://cdnjs.cloudflare.com/ajax/libs/iframe-resizer/4.3.2/iframeResizer.min.js",
+]
+
+# Configure viewcode extension.
+# based on https://github.com/readthedocs/sphinx-autoapi/issues/202
+rtd_version = os.environ.get("READTHEDOCS_VERSION")
+if rtd_version and rtd_version not in {"latest", "stable"}:
+    code_ref = rtd_version
+else:
+    code_ref = "main"
+
+code_url = f"https://github.com/kornia/kornia/blob/{code_ref}"
+
+
+def linkcode_resolve(domain, info):
+    if domain != "py":
+        return None
+
+    modname = info.get("module")
+    fullname = info.get("fullname")
+    if not modname or not fullname:
+        return None
+
+    try:
+        mod = importlib.import_module(modname)
+    except (ImportError, ModuleNotFoundError):
+        return None
+
+    obj = mod
+    for part in fullname.split("."):
+        try:
+            obj = getattr(obj, part)
+        except AttributeError:
+            return None
+
+    obj = inspect.unwrap(obj)
+
+    try:
+        fn = inspect.getsourcefile(obj)
+        src, start = inspect.getsourcelines(obj)
+    except (TypeError, OSError, ValueError):
+        return None
+
+    if not fn:
+        return None
+
+    fn = os.path.abspath(fn).replace("\\", "/")
+    marker = "/kornia/"
+    idx = fn.rfind(marker)
+    if idx == -1:
+        return None
+
+    file_rel = fn[idx + 1 :]  # -> "kornia/....py"
+    end = start + len(src) - 1
+    return f"{code_url}/{file_rel}#L{start}-L{end}"
+
+
+# -- Options for LaTeX output ---------------------------------------------
+
+latex_elements = {
+    # The paper size ('letterpaper' or 'a4paper').
+    #
+    # 'papersize': 'letterpaper',
+    # The font size ('10pt', '11pt' or '12pt').
+    #
+    # 'pointsize': '10pt',
+    # Additional stuff for the LaTeX preamble.
+    #
+    # 'preamble': '',
+    # Latex figure (float) alignment
+    #
+    # 'figure_align': 'htbp',
+}
+
+# Grouping the document tree into LaTeX files. List of tuples
+# (source start file, target name, title,
+#  author, documentclass [howto, manual, or own class]).
+latex_documents = [(master_doc, "kornia.tex", "Kornia", "manual")]
+
+# -- Options for manual page output ---------------------------------------
+
+# One entry per manual page. List of tuples
+# (source start file, name, description, authors, manual section).
+man_pages = [(master_doc, "Kornia", "Kornia Documentation", [author], 1)]
+
+# -- Options for Texinfo output -------------------------------------------
+
+# Grouping the document tree into Texinfo files. List of tuples
+# (source start file, target name, title, author,
+#  dir menu entry, description, category)
+texinfo_documents = [
+    (
+        master_doc,
+        "kornia",
+        "Kornia Documentation",
+        author,
+        "Kornia",
+        "Differentiable Computer Vision in Pytorch.",
+        "Miscellaneous",
+    )
+]
+
+# Example configuration for intersphinx: refer to the Python standard library.
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3/", None),
+    "numpy": ("http://numpy.org/doc/stable/", None),
+    "torch": ("http://pytorch.org/docs/stable/", None),
+}
+
+# mock these modules and won't try to actually import them
+autodoc_mock_imports = ["boxmot", "segmentation_models_pytorch"]
